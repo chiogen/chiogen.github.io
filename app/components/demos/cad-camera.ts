@@ -24,21 +24,23 @@ export class CadCameraDemo extends LitElement {
 
       let engine = this.engine = new Engine(canvas, true);
       let scene = this.scene = new Scene(engine);
+      scene.createDefaultLight();
 
       let camera = this.camera = new FreeCamera("freeCaemra", new Vector3(0, 200, 0), scene, true);
       camera.setTarget(Vector3.Zero());
-
       camera.inputs.clear();
 
-      let inputs = this.panInputs = new MousePanInputs();
-      inputs.camera = this.camera;
-      inputs.attachControl(canvas);
+      let input = this.panInputs = new MousePanInputs();
+      camera.inputs.add(input)
+      input.attachControl(canvas);
 
       this.generateEnvironment();
 
       this.engine.runRenderLoop(() => {
          scene.render();
       });
+
+      window.addEventListener("resize", () => engine.resize());
 
    }
 
@@ -94,7 +96,7 @@ export class CadCameraDemo extends LitElement {
             }
          </style>
          
-         <canvas class="scene"></canvas>
+         <canvas draggable="false" class="scene"></canvas>
 
       `
    }

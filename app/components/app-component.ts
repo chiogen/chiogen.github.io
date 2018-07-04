@@ -36,14 +36,6 @@ export class AppComponent extends LitElement implements AppComponentProps {
                <h2>CAD Camera Demo</h2>
                <cad-camera-demo></cad-camera-demo>
             </demo-component>
-            <demo-component>
-               <h2>CAD Camera Demo</h2>
-               <cad-camera-demo></cad-camera-demo>
-            </demo-component>
-            <demo-component>
-               <h2>CAD Camera Demo</h2>
-               <cad-camera-demo></cad-camera-demo>
-            </demo-component>
          </div>
 
       `
