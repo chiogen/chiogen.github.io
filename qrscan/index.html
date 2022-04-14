@@ -11,12 +11,16 @@
         <h2>Read QR Code</h2>
     </header>
     <div class="root">
+        <div class="note">
+            * The image will not be send anywhere.
+        </div>
         <div class="input">
-            Input:
-            <input type="file">
+            <b>Input:</b>
+            <input type="file" id="qrcode" accept="image/png, image/jpeg" @input="scanQrCode">
         </div>
         <div class="output">
-
+            <b>Output:</b>
+            {{ result }}
         </div>
     </div>
     <footer>
@@ -24,6 +28,7 @@
     </footer>
 
     <script src="https://unpkg.com/vue@3"></script>
+    <script src="https://unpkg.com/jsqr@1" async></script>
     <script type="module" src="src/index.js"></script>
 </body>
 
