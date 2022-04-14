@@ -1,0 +1,9 @@
+
+.root {
+    display: grid;
+    gap: 1rem;
+}
+
+.note {
+    font-size: 0.9rem;
+}
