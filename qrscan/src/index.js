@@ -1,39 +1,41 @@
 
-Vue.createApp({
-    data() {
-        return {
-            result: ''
-        };
-    },
-    methods: {
-        scanQrCode(event) {
-            const element = event.target;
-            if (!element || !element.files || element.files.length === 0)
-                return;
+/** @type {HTMLInputElement} */
+const inputElement = document.getElementById('qrcode');
+inputElement.addEventListener('input', scanQrCode);
 
-            /** @type {File} */
-            const file = element.files[0];
+/** @type {HTMLElement} */
+const outputElement = document.getElementById('outputTarget');
 
-            const url = URL.createObjectURL(file);
-            const image = new Image();
-            image.addEventListener('load', () => {
-                URL.revokeObjectURL(url);
+/**
+ * @param {Event} event 
+ * @returns 
+ */
+function scanQrCode(event) {
 
-                const canvas = new OffscreenCanvas(image.width, image.height);
+    const element = event.target;
+    if (!element || !element.files || element.files.length === 0)
+        return;
 
-                /** @type {CanvasRenderingContext2D} */
-                const ctx = canvas.getContext("2d");
+    /** @type {File} */
+    const file = element.files[0];
 
-                ctx.drawImage(image, 0, 0);
-                const imageData = ctx.getImageData(0, 0, image.width, image.height);
-            
-                const result = jsQR(imageData.data, imageData.width, imageData.height);
-                
-                this.result = result.data;
-            });
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.addEventListener('load', () => {
+        URL.revokeObjectURL(url);
 
-            image.src = url;
+        const canvas = new OffscreenCanvas(image.width, image.height);
 
-        }
-    }
-}).mount('.root');
+        /** @type {CanvasRenderingContext2D} */
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(image, 0, 0);
+        const imageData = ctx.getImageData(0, 0, image.width, image.height);
+
+        const result = jsQR(imageData.data, imageData.width, imageData.height);
+        outputElement.innerHTML = result.data;
+    });
+
+    image.src = url;
+
+}

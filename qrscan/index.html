@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <title>QR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -12,24 +14,23 @@
     </header>
     <div class="root">
         <div class="note">
-            * The image will not be send anywhere.
+            * The image will not be stored or send anywhere.
         </div>
         <div class="input">
             <b>Input:</b>
-            <input type="file" id="qrcode" accept="image/png, image/jpeg" @input="scanQrCode">
+            <input type="file" id="qrcode" placeholder="input" accept="image/png, image/jpeg">
         </div>
         <div class="output">
             <b>Output:</b>
-            {{ result }}
+            <span id="outputTarget"></span>
         </div>
     </div>
     <footer>
 
     </footer>
 
-    <script src="https://unpkg.com/vue@3"></script>
-    <script src="https://unpkg.com/jsqr@1" async></script>
-    <script type="module" src="src/index.js"></script>
+    <script src="/lib/jsQR.js" async></script>
+    <script type="module" src="./src/index.js" async></script>
 </body>
 
 </html>
