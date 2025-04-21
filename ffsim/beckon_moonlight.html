@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arena Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">R: Restart | WASD: Move | Right-Mouse: Rotate Camera</div>
+    <script>
+document.body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    return false;
+});
+
+function getInitialGameState() {
+    return {
+      rotatingCamera: false,
+      lastMouseX: 0,
+      canvas: { width: 800, height: 600 },
+      cameraRotation: 0,
+      debugCone: true,
+      arena: { center: null, radius: 250 },
+      enemies: [],
+      players: [],
+      state: "Spawning",
+      gameWon: false,
+      enemyIndex: 0,
+      spawnTimer: 0,
+      currentEnemy: 0,
+      waitingTimer: 0,
+      
+      // Change these to change difficulty
+      spawnInterval: 1.0,   // Time between mobs spawning.
+      waitTime: 7.0,        // Time the sim waits until the 1st mob starts attacking. Reducing will make it harder.
+      attackDelay: 1.5,     // Time between attacks in seconds, lower = less time to dodge.
+  };
+}
+
+var alwaysDrawDirectionIndicator = false; // Set to true to always show the enemy attack indicator
+var showDebugText = true;                 // Shows state text on top left
+var showGameOverText = true;              // Shows gameover text
+
+
+
+var game = getInitialGameState();
+
+function mousePressed() {
+    if (mouseButton === RIGHT) {
+        game.rotatingCamera = true;
+        game.lastMouseX = mouseX;
+    }
+}
+
+function mouseReleased() {
+    if (mouseButton === RIGHT) {
+        game.rotatingCamera = false;
+    }
+}
+
+function mouseMoved() {
+    if (game.rotatingCamera) {
+        const deltaX = mouseX - lastMouseX;
+        game.cameraRotation -= deltaX * 0.2;
+        game.lastMouseX = mouseX;
+        game.cameraRotation = (game.cameraRotation % 360 + 360) % 360;
+    }
+}
+
+class Enemy {
+    constructor(direction, cleave, pos, delay) {
+        this.dir = direction;
+        this.cleave = cleave;
+        this.pos = pos.copy();
+        this.state = "Spawning";
+        this.spawnTime = 0;
+        this.attackDelay = delay;
+        this.timeExecuted = 0;
+        this.radius = 20;
+    }
+
+    update(dt) {
+        if (this.state === "Charging") {
+            this.spawnTime += dt;
+            if (this.spawnTime >= this.attackDelay) {
+                this.state = "Executing";
+            }
+        }
+        if (this.state === "Executing") {
+            switch(this.dir) {
+                case "North": this.pos.y += 2000 * dt; break;
+                case "East": this.pos.x -= 2000 * dt; break;
+                case "South": this.pos.y -= 2000 * dt; break;
+                case "West": this.pos.x += 2000 * dt; break;
+            }
+            this.timeExecuted += dt;
+            if (this.timeExecuted > 1.0) this.state = "Finished";
+        }
+    }
+
+    draw(arenaCenter, arenaRadius, cameraRot) {
+        if (this.state === "Spawning" || this.state === "Finished") return;
+        
+        // Small cleave indicator
+        if ( this.state === "Waiting" || this.state === "Charging" ) {
+            var canSee = true;
+            switch(this.dir) {
+                case "North": 
+                    canSee = this.isAngleInView(cameraRot, 0, 120);
+                    break;
+                case "East": 
+                    canSee = this.isAngleInView(cameraRot, 270, 120);
+                    break;
+                case "South": 
+                    canSee = this.isAngleInView(cameraRot, 180, 120);
+                    break;
+                case "West": 
+                    canSee = this.isAngleInView(cameraRot, 90, 120);
+                    break;
+            }
+            
+            if( canSee || alwaysDrawDirectionIndicator )
+            {
+                var offset;
+                switch( this.dir )
+                {
+                    case "North": offset = this.cleave === "Left" ? createVector( - 30, 0 ) : createVector( 30, 0 );
+                        break;
+                    case "East": offset = this.cleave === "Left" ? createVector( 0, - 30 ) : createVector( 0, 30 );
+                        break;
+                    case "South": offset = this.cleave === "Left" ? createVector( 30, 0 ) : createVector( - 30, 0 );
+                        break;
+                    case "West": offset = this.cleave === "Left" ? createVector( 0, 30 ) : createVector( 0, - 30 );
+                        break;
+                }
+                fill( 255, 100, 100, 100 );
+                noStroke();
+                ellipse(this.pos.x + offset.x, this.pos.y + offset.y, 30);
+            }
+        }
+        
+        // Attack effect
+        if ( this.state === "Executing" ) {
+            fill( 255, 0, 0, 100 );
+            
+            var size;
+            var pos;
+            switch (this.dir) {
+                case "North":
+                    if (this.cleave === "Left") {
+                        size = createVector( arenaCenter.x, 2 * arenaRadius );
+                        pos = createVector( 0, arenaCenter.y - arenaRadius );
+                    } else {
+                        size = createVector( arenaCenter.x, 2 * arenaRadius );
+                        pos = createVector( arenaCenter.x, arenaCenter.y - arenaRadius );
+                    }
+                    break;
+                case "East":
+                    if (this.cleave === "Left") {
+                        size = createVector( 2 * arenaRadius, arenaCenter.y );
+                        pos = createVector( arenaCenter.x - arenaRadius, 0 );
+                    } else {
+                        size = createVector( 2 * arenaRadius, arenaCenter.y );
+                        pos = createVector( arenaCenter.x - arenaRadius, arenaCenter.y );
+                    }
+                    break;
+                case "South":
+                    if (this.cleave === "Left") {
+                        size = createVector( arenaCenter.x, 2 * arenaRadius );
+                        pos = createVector( arenaCenter.x, arenaCenter.y - arenaRadius );
+                    } else {
+                        size = createVector( arenaCenter.x, 2 * arenaRadius );
+                        pos = createVector( 0, arenaCenter.y - arenaRadius );
+                    }
+                    break;
+                case "West":
+                    if (this.cleave === "Left") {
+                        size = createVector( 2 * arenaRadius, arenaCenter.y );
+                        pos = createVector( arenaCenter.x - arenaRadius, arenaCenter.y );
+                    } else {
+                        size = createVector( 2 * arenaRadius, arenaCenter.y );
+                        pos = createVector( arenaCenter.x - arenaRadius, 0 );
+                    }
+                    break;
+            }
+            noStroke();
+            rect( pos.x, pos.y, size.x, size.y );
+        }
+        
+        if( this.state === "Waiting" || this.state === "Charging" || this.state === "Executing" ){
+            // Enemy body
+            fill(255, 0, 255);
+            noStroke();
+            ellipse(this.pos.x, this.pos.y, this.radius * 2);
+        }
+    }
+    
+    isPlayerInAttack(playerPos, arenaCenter){
+        switch (this.dir) {
+            case "North":
+                return this.cleave === "Left" ? playerPos.x <= arenaCenter.x : playerPos.x >= arenaCenter.x;
+            case "East":
+                return this.cleave === "Left" ? playerPos.y <= arenaCenter.y : playerPos.y >= arenaCenter.y;
+            case "South":
+                return this.cleave === "Left" ? playerPos.x >= arenaCenter.x : playerPos.x <= arenaCenter.x;
+            case "West":
+                return this.cleave === "Left" ? playerPos.y >= arenaCenter.y : playerPos.y <= arenaCenter.y;
+        }
+        return false;
+    }
+    
+    isExecuting(){ return this.state == "Executing"; }
+    
+    isAngleInView(currentAngle, targetAngle, coneWidth) {
+        const halfCone = coneWidth / 2;
+        const angleDifference = Math.abs(((currentAngle - targetAngle + 180) % 360) - 180);
+        return angleDifference <= halfCone;
+    }
+    
+    resetPosition(newPos) {
+        this.pos = newPos.copy();
+    }
+}
+
+class Player {
+    constructor(type, x, y) {
+        this.type = type;
+        this.pos = createVector(x, y);
+        this.vel = createVector();
+        this.radius = 15;
+        this.speed = 225;
+        this.target = createVector(x, y);
+    }
+
+    update(dt, arenaCenter, arenaRadius, cameraRot, enemies) {
+        if (this.type === "human") {
+            const sin = Math.sin( radians(-cameraRot) );
+            const cos = Math.cos( radians(-cameraRot) );
+            
+            const forward = createVector(sin, -cos);
+            const right = createVector(cos,sin);
+
+            if (keyIsDown(87)) this.vel.add(forward); // W
+            if (keyIsDown(83)) this.vel.sub(forward); // S
+            if (keyIsDown(65)) this.vel.sub(right);   // A
+            if (keyIsDown(68)) this.vel.add(right);   // D
+        }
+        
+        if( this.vel.x != 0 || this.vel.y != 0 )
+        {
+           // Apply movement
+            this.pos.add(p5.Vector.mult(this.vel.copy().normalize(), this.speed * dt));
+
+            // Keep within arena
+            const toCenter = p5.Vector.sub(this.pos, arenaCenter);
+            const dist = toCenter.mag();
+            const maxDist = arenaRadius - this.radius;
+            
+            if (dist > maxDist) {
+                toCenter.setMag(maxDist);
+                this.pos = p5.Vector.add(arenaCenter, toCenter);
+            }
+            this.vel.mult(0.0);
+        }
+    }
+}
+
+function getRandomInt(max) {
+  return Math.floor(Math.random() * max);
+}
+
+function init()
+{
+    game = getInitialGameState();
+    createCanvas(game.canvas.width, game.canvas.width);
+
+    
+    game.arena.center = createVector(game.canvas.width / 2, game.canvas.height / 2);
+      
+    // Initialize players
+    game.players.push(new Player("human", game.canvas.width / 2, game.canvas.height / 2));
+    var directions = [];
+    var dir = getRandomInt( 4 );
+    const clockwise = getRandomInt( 2 );    
+    
+    directions.push( dir );
+    for( i = 1; i < 4; ++i )
+    {
+        if( clockwise )
+        {
+            directions.push( (directions[i-1] + 1) % 4 );
+        }
+        else 
+        {
+            directions.push( (directions[i-1] - 1 + 4) % 4 );
+        }
+    }
+    
+    const directionsStrings = [ "North", "East", "South", "West" ]
+    
+    for( i = 0; i < 4; ++i )
+    {
+        var pos;
+        switch( directionsStrings[directions[i]] )
+        {
+            case "North": pos = createVector( game.arena.center.x, game.arena.center.y - game.arena.radius ); break;
+            case "East":  pos = createVector( game.arena.center.x + game.arena.radius, game.arena.center.y ); break;
+            case "South": pos = createVector( game.arena.center.x, game.arena.center.y + game.arena.radius ); break;
+            case "West":  pos = createVector( game.arena.center.x - game.arena.radius, game.arena.center.y ); break;
+        }
+        
+        var cleave = getRandomInt( 2 ) == 0 ? "Left" : "Right";
+        game.enemies.push( new Enemy( directionsStrings[directions[i]], cleave, pos, game.attackDelay ) );
+    }
+}
+
+function setup() {
+    // Only prevent context menu on the canvas element
+    const canvas = document.querySelector('canvas');
+    canvas.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        return false;
+    });
+
+    init();
+}
+
+function draw() {
+    background(50);
+    const dt = deltaTime / 1000;
+
+    // Camera rotation
+    if (mouseIsPressed && mouseButton === RIGHT) {
+        if (!game.rotatingCamera) {
+            game.rotatingCamera = true;
+            game.lastMouseX = mouseX;
+        }
+        const deltaX = mouseX - game.lastMouseX;
+        game.cameraRotation -= deltaX * 0.2;
+        game.lastMouseX = mouseX;
+        
+        // Keep within 0-360
+        game.cameraRotation = (game.cameraRotation % 360 + 360) % 360;
+    } else {
+        rotatingCamera = false;
+    }
+    // Game state
+    
+    translate(width/2, height/2);
+    rotate(radians(game.cameraRotation));
+    translate(-game.arena.center.x, -game.arena.center.y);
+    
+    // Update entities
+    
+    if( game.state !== "GameOver" || game.gameWon )
+    {
+        game.enemies.forEach(e => e.update(dt));
+    
+        game.players.forEach(p => {
+            p.update(dt, game.arena.center, game.arena.radius, game.cameraRotation, game.enemies);
+        });
+    }
+
+    if( game.state === "Spawning" )
+    {
+        game.spawnTimer += dt;
+        if( game.spawnTimer >= game.spawnInterval )
+        {
+            var index = game.enemyIndex;
+            console.log( "Index: " + index );
+            if( index < 4 )
+            {
+                game.enemies[index].state = "Waiting";
+                game.spawnTimer = 0;
+                game.enemyIndex += 1;
+                if( game.enemyIndex === 4 ) 
+                {
+                    game.enemyIndex = 0;
+                    game.state = "Waiting";
+                }
+            }
+        }
+    }   
+    else if( game.state === "Waiting" )
+    {
+        console.log( "Waiting..." );
+        game.waitingTimer += dt;
+        if( game.waitingTimer > game.waitTime ) game.state = "Resolving";
+    }
+    else if( game.state === "Resolving" )
+    {
+        var anyAttacking = false;
+        if( game.enemyIndex < 4 )
+        {
+            var e = game.enemies[game.enemyIndex];
+            if( e.state === "Waiting" )
+            {
+                e.state = "Charging";
+            }
+            
+            anyAttacking = true;
+            
+            if( e.isExecuting() )
+            {
+                if( e.isPlayerInAttack( game.players[0].pos, game.arena.center ) )
+                {
+                    game.state = "GameOver";
+                    game.gameWon = false;
+                }
+                game.enemyIndex += 1;
+            }
+        }
+        
+        if( !anyAttacking )
+        {
+            game.state = "GameOver";
+            game.gameWon = true;
+        }
+    }
+   
+    // Draw arena
+    noFill();
+    stroke(255);
+    ellipse(game.arena.center.x, game.arena.center.y, game.arena.radius*2);
+    
+
+    // Draw entities
+    game.enemies.forEach(e => e.draw(game.arena.center, game.arena.radius, game.cameraRotation));
+    
+    // Debug cone
+    if (game.debugCone) drawDebugCone( game.cameraRotation);
+    
+    game.players.forEach(p => {
+        fill(p.type === "human" ? color(0, 255, 0) : color(0, 0, 255));
+        noStroke();
+        ellipse(p.pos.x, p.pos.y, p.radius*2);
+    });
+
+        
+    resetMatrix();
+    textSize( 30 );
+    if( game.state == "GameOver" && showGameOverText )
+    {
+        if( game.gameWon )
+        {
+            text( "You survived!", 0, 50 );
+        }
+        else
+        {
+            text( "You died", 0, 50 );
+        }
+    }
+    else if( showDebugText )
+    {
+        text( game.state, 0, 50 );
+    }    
+}
+
+function drawDebugCone(cameraRot) {
+    const player = game.players[0];
+    const coneLength = player.radius * 3.3;
+    const coneAngle = 60;
+
+    push();
+    translate(player.pos.x, player.pos.y);
+    rotate(radians(-cameraRot - 90));
+    
+    fill(255, 0, 0, 50);
+    noStroke();
+    beginShape();
+    vertex(0, 0);
+    for (let a = -coneAngle/2; a <= coneAngle/2; a++) {
+        const x = cos(radians(a)) * coneLength;
+        const y = sin(radians(a)) * coneLength;
+        vertex(x, y);
+    }
+    endShape(CLOSE);
+    pop();
+}
+
+function windowResized() {
+/*
+    resizeCanvas(windowWidth, windowHeight);
+    game.arena.center.set(width/2, height/2);
+    game.arena.radius = min(width, height) * 0.4;
+    init();*/
+}
+
+function keyPressed() {
+   // if (keyCode === F1) game.debugCone = !game.debugCone;
+    if (key === 'R' || key === 'r') init();
+}
+    </script>
+</body>
+</html>
