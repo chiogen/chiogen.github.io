@@ -109,10 +109,6 @@
     }
 
     function update(dt, ts){
-      if(state==='casting'){
-        if(ts - castStart >= castDuration) startPreview();
-        return;
-      }
       if(state==='failed' || state==='success'){
         if(ts - endStart >= endDuration) location.reload();
         return;
@@ -133,6 +129,12 @@
           player.y=arena.y+(arena.radius-player.radius)*Math.sin(ang);
         }
       }
+      
+      if(state==='casting'){
+        if(ts - castStart >= castDuration) startPreview();
+        return;
+      }
+      
       if(state==='active' && justActivated){
         activePattern.forEach(i=>{
           const p=positions[i];
@@ -146,9 +148,9 @@
       ctx.clearRect(0,0,canvas.width,canvas.height);
       drawArena();
       drawMarkers();
-      if(state==='casting') return drawCastBar(ts);
       drawPattern();
       drawPlayer();
+      if(state==='casting') return drawCastBar(ts);
       if(state==='failed') drawEndText('Failed');
       if(state==='success') drawEndText('Success');
     }
